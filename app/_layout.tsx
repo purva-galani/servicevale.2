@@ -66,21 +66,9 @@ export default function RootLayout() {
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="home" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        {/* Add the OTP verification screen */}
-        <Stack.Screen 
-          name="otp-verification" 
-          options={{ 
-            title: 'Verify OTP',
-            headerShown: true,
-            headerStyle: {
-              backgroundColor: colorScheme === 'dark' ? '#1E293B' : '#FFFFFF',
-            },
-            headerTintColor: colorScheme === 'dark' ? '#FFFFFF' : '#1E293B',
-          }} 
-        />
         {/* Add more screens as needed */}
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
   );
-}
+}//_layout.tsx

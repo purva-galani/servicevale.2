@@ -3,7 +3,6 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     Alert,
-    Button,
     Image,
     KeyboardAvoidingView,
     Modal,
@@ -42,10 +41,6 @@ const LoginScreen = () => {
     const [resetUserId, setResetUserId] = useState('');
     const [resetSecret, setResetSecret] = useState('');
     const [resetSuccess, setResetSuccess] = useState(false);
-    const [otpModalVisible, setOtpModalVisible] = useState(false);
-    const [otp, setOtp] = useState('');
-    const [otpSent, setOtpSent] = useState(false);
-    const [resetToken, setResetToken] = useState('');
 
     const resetFields = () => {
         setEmail('');
@@ -81,6 +76,7 @@ const LoginScreen = () => {
             }
         };
 
+        // Get the subscription object when adding the listener
         const subscription = Linking.addEventListener('url', handleDeepLink);
         
         // Check initial URL if app was launched from a deep link
@@ -89,10 +85,10 @@ const LoginScreen = () => {
         });
 
         return () => {
+            // Remove the listener using the subscription
             subscription.remove();
         };
     }, []);
-
 
    const handleLogin = async () => {
     if (email === '' || password === '') {
@@ -176,8 +172,6 @@ const LoginScreen = () => {
     
     const handleForgotPassword = () => {
         setForgotModalVisible(true);
-        setOtpSent(false);
-        setOtp('');
     };
 
     const handleSendOTP = async () => {
@@ -187,64 +181,66 @@ const LoginScreen = () => {
             Alert.alert('Error', 'Invalid email address');
         } else {
             try {
-                // Generate a random 6-digit OTP
-                const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+                // For Android emulator use 10.0.2.2, for iOS simulator/device use localhost
+                const resetUrl = Platform.OS === 'android' 
+                    ? 'http://10.0.2.2:8081/reset-password' 
+                    : 'http://localhost:8081/reset-password';
                 
-                // In a real app, you would send this OTP via email using Appwrite Functions or a service like SendGrid
-                console.log('OTP for testing:', generatedOtp); // Remove this in production
-                
-                // For demo purposes, we'll store the OTP in state
-                setResetToken(generatedOtp);
-                
-                // Show success message and switch to OTP input
-                Alert.alert(
-                    'OTP Sent', 
-                    `A 6-digit OTP has been sent to ${forgotEmail}. Please check your email.`,
-                    [{ text: 'OK', onPress: () => setOtpSent(true) }]
-                );
-                
-            } catch (error) {
-                console.error('OTP Send Error:', error);
-                Alert.alert('Error', 'Failed to send OTP. Please try again.');
+                await account.createRecovery(forgotEmail, resetUrl);
+                Alert.alert('Recovery Email Sent', `A password reset link has been sent to ${forgotEmail}. Please check your email.`);
+                setForgotModalVisible(false);
+                setForgotEmail('');
+            } catch (error: any) {
+                console.error('Recovery Error:', error);
+                Alert.alert('Error', error?.message || 'Failed to send recovery email');
             }
-        }
-    };
-
-    const handleVerifyOTP = () => {
-        if (otp === '') {
-            Alert.alert('Error', 'Please enter the OTP');
-        } else if (otp !== resetToken) {
-            Alert.alert('Error', 'Invalid OTP. Please try again.');
-        } else {
-            setForgotModalVisible(false);
-            setResetModalVisible(true);
         }
     };
 
     const handleResetPassword = async () => {
         if (!newPassword || !resetConfirmPassword) {
             Alert.alert('Error', 'Please fill in all fields');
-        } else if (newPassword !== resetConfirmPassword) {
+            return;
+        }
+        
+        if (newPassword !== resetConfirmPassword) {
             Alert.alert('Error', 'Passwords do not match');
-        } else if (!passwordRegex.test(newPassword)) {
+            return;
+        }
+        
+        if (!passwordRegex.test(newPassword)) {
             Alert.alert('Error', 'Password must contain an uppercase letter, number, and special character');
-        } else {
-            try {
-                if (!resetUserId || !resetSecret) {
-                    throw new Error('Invalid reset credentials');
-                }
-                
-                await account.updateRecovery(resetUserId, resetSecret, newPassword);
-                
-                Alert.alert('Success', 'Your password has been reset successfully');
-                resetFields();
-                setResetModalVisible(false);
-                setResetUserId('');
-                setResetSecret('');
-            } catch (error: any) {
-                console.error('Password Reset Error:', error);
-                Alert.alert('Error', error?.message || 'Failed to reset password');
+            return;
+        }
+
+        try {
+            if (!resetUserId || !resetSecret) {
+                throw new Error('Invalid reset credentials');
             }
+            
+            await account.updateRecovery(resetUserId, resetSecret, newPassword);
+            
+            // Show success alert
+            Alert.alert(
+                'Success', 
+                'Your password has been reset successfully',
+                [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            // Close modal and reset fields
+                            setResetModalVisible(false);
+                            resetFields();
+                            setResetUserId('');
+                            setResetSecret('');
+                        }
+                    }
+                ]
+            );
+            
+        } catch (error: any) {
+            console.error('Password Reset Error:', error);
+            Alert.alert('Error', error?.message || 'Failed to reset password');
         }
     };
 
@@ -270,67 +266,35 @@ const LoginScreen = () => {
                 <Modal transparent animationType="fade" visible={forgotModalVisible}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalCard}>
-                            <Text style={styles.modalTitle}>
-                                {otpSent ? 'Enter OTP' : 'Reset Password'}
-                            </Text>
-                            
-                            {!otpSent ? (
-                                <>
-                                    <Text style={styles.modalSubtitle}>
-                                        Enter your email to receive a verification OTP
-                                    </Text>
-                                    <TextInput
-                                        style={styles.modalInput}
-                                        placeholder="Email address"
-                                        placeholderTextColor="#999"
-                                        value={forgotEmail}
-                                        onChangeText={setForgotEmail}
-                                        keyboardType="email-address"
-                                        autoCapitalize="none"
-                                    />
-                                </>
-                            ) : (
-                                <>
-                                    <Text style={styles.modalSubtitle}>
-                                        Enter the 6-digit OTP sent to {forgotEmail}
-                                    </Text>
-                                    <TextInput
-                                        style={styles.modalInput}
-                                        placeholder="Enter OTP"
-                                        placeholderTextColor="#999"
-                                        value={otp}
-                                        onChangeText={setOtp}
-                                        keyboardType="number-pad"
-                                        maxLength={6}
-                                    />
-                                </>
-                            )}
-                            
+                            <Text style={styles.modalTitle}>Reset Password</Text>
+                            <Text style={styles.modalSubtitle}>Enter your email to receive a recovery link</Text>
+                            <TextInput
+                                style={styles.modalInput}
+                                placeholder="Email address"
+                                placeholderTextColor="#999"
+                                value={forgotEmail}
+                                onChangeText={setForgotEmail}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                            />
                             <View style={styles.modalButtonGroup}>
                                 <TouchableOpacity 
                                     style={[styles.modalButton, styles.secondaryButton]}
-                                    onPress={() => {
-                                        setForgotModalVisible(false);
-                                        setOtpSent(false);
-                                        setForgotEmail('');
-                                    }}
+                                    onPress={() => setForgotModalVisible(false)}
                                 >
                                     <Text style={styles.secondaryButtonText}>Cancel</Text>
                                 </TouchableOpacity>
-                                
                                 <TouchableOpacity 
                                     style={[styles.modalButton, styles.primaryButton]}
-                                    onPress={otpSent ? handleVerifyOTP : handleSendOTP}
+                                    onPress={handleSendOTP}
                                 >
-                                    <Text style={styles.primaryButtonText}>
-                                        {otpSent ? 'Verify OTP' : 'Send OTP'}
-                                    </Text>
+                                    <Text style={styles.primaryButtonText}>Send OTP</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
                     </View>
                 </Modal>
- 
+
                 {/* Reset Password Modal */}
                 <Modal transparent animationType="fade" visible={resetModalVisible}>
                     <View style={styles.modalOverlay}>
@@ -474,12 +438,6 @@ const LoginScreen = () => {
                             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                         </TouchableOpacity>
                     )}
-{/* 
-                    // Add this somewhere in your app to test:
-                        <Button 
-                        title="Test Deep Link" 
-                        onPress={() => Linking.openURL('servicevale://reset-password?userId=test&secret=test')}
-                        /> */}
                     
                     <TouchableOpacity
                         style={styles.authButton}
@@ -506,26 +464,12 @@ const LoginScreen = () => {
                         </TouchableOpacity>
                     </View>
                 </View>
-                
             </ScrollView>
         </KeyboardAvoidingView>
     );
 };
 
 const styles = StyleSheet.create({
-    otpInput: {
-        height: 48,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        backgroundColor: '#F8FAFC',
-        fontSize: 24, // Larger font for OTP
-        letterSpacing: 8, // Space between digits
-        textAlign: 'center',
-        color: '#1E293B',
-        marginBottom: 16,
-    },
     container: {
         flexGrow: 1,
         backgroundColor:'#FBFBFB',
@@ -722,4 +666,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export default LoginScreen;//1
+export default LoginScreen;//login.tsx
